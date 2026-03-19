@@ -98,7 +98,7 @@ async function parseRobberBalance(client, botAppId) {
         const embed = message.embeds[0];
         const cashField = embed.fields.find(f => f.name.toLowerCase().includes('wallet') || f.name.toLowerCase().includes('cash'));
         if (cashField) {
-          const cash = parseInt(cashField.value.replace(/[^\d]/g, ''));
+          const cash = parseInt(cashField.value.replace(/[^\d-]/g, ''));
           resolve(cash);
           client.removeListener('messageCreate', listener);
         }
@@ -192,7 +192,7 @@ async function collectIncome(token, index) {
         await sleep(CONFIG.WAIT_AFTER_SEND * 1000);
 
         // Gửi lệnh deposit all
-        await channel.sendSlash(CONFIG.UNBELIEVA_APP_ID, "deposit", [{ type: 3, name: "amount", value: "all" }]);
+        await channel.send("/deposit all");
         log(username, `Đã gửi /deposit all thành công!`, "success");
 
         // Chờ bot phản hồi deposit
@@ -201,15 +201,13 @@ async function collectIncome(token, index) {
         // Rob/Crime logic
         if (CONFIG.ENABLE_ROB) {
           // Gửi /balance để lấy cash của robber
-          await channel.sendSlash(CONFIG.UNBELIEVA_APP_ID, "balance");
+          await channel.send("/balance");
           const robberCash = await parseRobberBalance(client, CONFIG.UNBELIEVA_APP_ID);
           log(username, `Robber cash: $${robberCash}`, "info");
 
           // Gửi /leaderboard -cash
-          await channel.sendSlash(CONFIG.UNBELIEVA_APP_ID, "leaderboard", [
-            { type: 3, name: "type", value: "-cash" }
-          ]);
-          log(username, `Đã gửi /leaderboard -cash`, "info");
+          await channel.send("/leaderboard 1 -cash");
+          log(username, `Đã gửi /leaderboard 1 -cash`, "info");
 
           // Parse top users
           const victims = await parseTopCashUser(client, CONFIG.UNBELIEVA_APP_ID);
@@ -241,12 +239,14 @@ async function collectIncome(token, index) {
           }
         }
 
-        if (CONFIG.ENABLE_CRIME) {
+        if (CONFIG.ENABLE_CRIME && robberCash > CONFIG.MIN_CRIME_CASH) {
           // Gửi /crime
           await channel.sendSlash(CONFIG.UNBELIEVA_APP_ID, "crime");
           log(username, `Đã gửi /crime`, "info");
 
           await sleep(CONFIG.WAIT_AFTER_ROB_CRIME * 1000);
+        } else if (CONFIG.ENABLE_CRIME) {
+          log(username, `Bỏ qua /crime: cash quá thấp (${robberCash})`, "warn");
         }
       } catch (e) {
         log(username, `Lỗi: ${e.message}`, "error");

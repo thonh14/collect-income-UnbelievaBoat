@@ -39,6 +39,7 @@ const CONFIG = {
   WAIT_AFTER_LEADERBOARD: 3,  // Chờ phản hồi leaderboard (giây)
   WAIT_AFTER_ROB_CRIME: 2,  // Chờ phản hồi rob/crime (giây)
   MIN_SUCCESS_RATE: 60,  // Tỷ lệ thành công tối thiểu để rob (%)
+  MIN_CRIME_CASH: 1000,  // Cash tối thiểu để crime (tránh mất tiền nếu fail)
 };
 
 module.exports = { CONFIG };

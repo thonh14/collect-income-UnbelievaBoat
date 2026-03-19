@@ -11,7 +11,7 @@ Tự động gửi lệnh `/collect-income` và `/deposit all` của bot [Unbeli
 - Safety timeout cho mỗi tài khoản
 - Tự động deposit toàn bộ số tiền đã collect vào bank sau mỗi lần collect
 - Tự động rob người dùng có tiền mặt cao nhất mà robber có thể rob thành công (cash robber > cash victim, tỷ lệ >60%)
-- Tự động gửi lệnh /crime để kiếm tiền thêm
+- Tự động gửi lệnh /crime để kiếm tiền thêm (chỉ khi cash >1000 để tránh mất tiền nếu fail)
 
 ## Cài đặt
 
@@ -64,6 +64,7 @@ CHANNEL_ID: "123456789012345678",  // ID của channel muốn gửi lệnh
 | `WAIT_AFTER_LEADERBOARD` | `3` | Chờ phản hồi leaderboard (giây) |
 | `WAIT_AFTER_ROB_CRIME` | `2` | Chờ phản hồi rob/crime (giây) |
 | `MIN_SUCCESS_RATE` | `60` | Tỷ lệ thành công tối thiểu để rob (%) |
+| `MIN_CRIME_CASH` | `1000` | Cash tối thiểu để crime (tránh mất tiền nếu fail) |
 
 ## Chạy
 
