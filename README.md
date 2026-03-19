@@ -1,6 +1,6 @@
-# Discord Collect Income Bot
+# Discord Collect Income & Deposit Bot
 
-Tự động gửi lệnh `/collect-income` của bot [UnbelievaBoat](https://unbelievaboat.com/) theo chu kỳ 8 tiếng với thời gian ngẫu nhiên.
+Tự động gửi lệnh `/collect-income` và `/deposit all` của bot [UnbelievaBoat](https://unbelievaboat.com/) theo chu kỳ 8 tiếng với thời gian ngẫu nhiên.
 
 ## Tính năng
 
@@ -9,6 +9,9 @@ Tự động gửi lệnh `/collect-income` của bot [UnbelievaBoat](https://un
 - Delay ngẫu nhiên giữa các tài khoản
 - Log màu sắc trực quan theo thời gian thực
 - Safety timeout cho mỗi tài khoản
+- Tự động deposit toàn bộ số tiền đã collect vào bank sau mỗi lần collect
+- Tự động rob người dùng có tiền mặt cao nhất (cash) sau deposit (chỉ khi tỷ lệ thành công >60%)
+- Tự động gửi lệnh /crime để kiếm tiền thêm
 
 ## Cài đặt
 
@@ -56,6 +59,11 @@ CHANNEL_ID: "123456789012345678",  // ID của channel muốn gửi lệnh
 | `DELAY_BETWEEN_ACCOUNTS_MAX` | `15` | Delay tối đa giữa tài khoản (giây) |
 | `ACCOUNT_TIMEOUT` | `30` | Timeout mỗi tài khoản (giây) |
 | `WAIT_AFTER_SEND` | `5` | Chờ bot phản hồi sau khi gửi (giây) |
+| `ENABLE_ROB` | `true` | Bật rob top cash user |
+| `ENABLE_CRIME` | `true` | Bật crime sau rob |
+| `WAIT_AFTER_LEADERBOARD` | `3` | Chờ phản hồi leaderboard (giây) |
+| `WAIT_AFTER_ROB_CRIME` | `2` | Chờ phản hồi rob/crime (giây) |
+| `MIN_SUCCESS_RATE` | `60` | Tỷ lệ thành công tối thiểu để rob (%) |
 
 ## Chạy
 

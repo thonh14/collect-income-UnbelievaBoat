@@ -28,10 +28,17 @@ const CONFIG = {
 
   // ---- Timeout Settings ----
   // Thời gian tối đa chờ một tài khoản hoàn thành (giây)
-  ACCOUNT_TIMEOUT: 30,
+  ACCOUNT_TIMEOUT: 60,
 
   // Chờ sau khi gửi lệnh để bot phản hồi (giây)
   WAIT_AFTER_SEND: 5,
+
+  // ---- Rob/Crime Settings ----
+  ENABLE_ROB: true,  // Bật rob top cash user
+  ENABLE_CRIME: true,  // Bật crime sau rob
+  WAIT_AFTER_LEADERBOARD: 3,  // Chờ phản hồi leaderboard (giây)
+  WAIT_AFTER_ROB_CRIME: 2,  // Chờ phản hồi rob/crime (giây)
+  MIN_SUCCESS_RATE: 60,  // Tỷ lệ thành công tối thiểu để rob (%)
 };
 
 module.exports = { CONFIG };

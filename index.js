@@ -51,6 +51,62 @@ function formatDuration(ms) {
 }
 
 // ============================================================
+// PARSE LEADERBOARD
+// ============================================================
+
+async function parseTopCashUser(client, botAppId) {
+  return new Promise((resolve) => {
+    const listener = (message) => {
+      if (message.author.id === botAppId && message.embeds.length > 0) {
+        const embed = message.embeds[0];
+        if (embed.fields && embed.fields.length > 0) {
+          const topField = embed.fields[0].value;  // "1. <@user_id> - $amount"
+          const userMatch = topField.match(/<@(\d+)>/);
+          if (userMatch) {
+            const userId = userMatch[1];
+            const amountMatch = topField.match(/\$(\d+)/);
+            const amount = amountMatch ? parseInt(amountMatch[1]) : 0;
+            resolve({ userId, amount });
+            client.removeListener('messageCreate', listener);
+            return;
+          }
+        }
+      }
+    };
+    client.on('messageCreate', listener);
+    setTimeout(() => {
+      client.removeListener('messageCreate', listener);
+      resolve(null);  // Timeout, không tìm thấy
+    }, 10000);
+  });
+}
+
+// ============================================================
+// PARSE ROBBER BALANCE
+// ============================================================
+
+async function parseRobberBalance(client, botAppId) {
+  return new Promise((resolve) => {
+    const listener = (message) => {
+      if (message.author.id === botAppId && message.embeds.length > 0) {
+        const embed = message.embeds[0];
+        const cashField = embed.fields.find(f => f.name.toLowerCase().includes('wallet') || f.name.toLowerCase().includes('cash'));
+        if (cashField) {
+          const cash = parseInt(cashField.value.replace(/[^\d]/g, ''));
+          resolve(cash);
+          client.removeListener('messageCreate', listener);
+        }
+      }
+    };
+    client.on('messageCreate', listener);
+    setTimeout(() => {
+      client.removeListener('messageCreate', listener);
+      resolve(0);
+    }, 10000);
+  });
+}
+
+// ============================================================
 // LOAD TOKENS
 // ============================================================
 
@@ -128,6 +184,57 @@ async function collectIncome(token, index) {
 
         // Chờ bot phản hồi
         await sleep(CONFIG.WAIT_AFTER_SEND * 1000);
+
+        // Gửi lệnh deposit all
+        await channel.sendSlash(CONFIG.UNBELIEVA_APP_ID, "deposit", [{ type: 3, name: "amount", value: "all" }]);
+        log(username, `Đã gửi /deposit all thành công!`, "success");
+
+        // Chờ bot phản hồi deposit
+        await sleep(CONFIG.WAIT_AFTER_SEND * 1000);
+
+        // Rob/Crime logic
+        if (CONFIG.ENABLE_ROB) {
+          // Gửi /balance để lấy cash của robber
+          await channel.sendSlash(CONFIG.UNBELIEVA_APP_ID, "balance");
+          const robberCash = await parseRobberBalance(client, CONFIG.UNBELIEVA_APP_ID);
+          log(username, `Robber cash: $${robberCash}`, "info");
+
+          // Gửi /leaderboard -cash
+          await channel.sendSlash(CONFIG.UNBELIEVA_APP_ID, "leaderboard", [
+            { type: 3, name: "type", value: "-cash" }
+          ]);
+          log(username, `Đã gửi /leaderboard -cash`, "info");
+
+          // Parse top user
+          const topUser = await parseTopCashUser(client, CONFIG.UNBELIEVA_APP_ID);
+          if (topUser && topUser.amount > 0) {
+            // Tính tỷ lệ ước tính
+            const successRate = Math.min(90, Math.max(10, 50 + (robberCash / topUser.amount - 1) * 25));
+            if (successRate > CONFIG.MIN_SUCCESS_RATE) {  // Threshold tùy chỉnh
+              await sleep(CONFIG.WAIT_AFTER_LEADERBOARD * 1000);
+
+              // Gửi /rob <user_id>
+              await channel.sendSlash(CONFIG.UNBELIEVA_APP_ID, "rob", [
+                { type: 6, name: "user", value: topUser.userId }
+              ]);
+              log(username, `Đã rob user ${topUser.userId} (tỷ lệ: ${successRate.toFixed(1)}%)`, "success");
+
+              await sleep(CONFIG.WAIT_AFTER_ROB_CRIME * 1000);
+            } else {
+              log(username, `Bỏ qua rob: tỷ lệ thấp (${successRate.toFixed(1)}%)`, "warn");
+            }
+          } else {
+            log(username, `Không tìm thấy top user hoặc họ không có cash`, "warn");
+          }
+        }
+
+        if (CONFIG.ENABLE_CRIME) {
+          // Gửi /crime
+          await channel.sendSlash(CONFIG.UNBELIEVA_APP_ID, "crime");
+          log(username, `Đã gửi /crime`, "info");
+
+          await sleep(CONFIG.WAIT_AFTER_ROB_CRIME * 1000);
+        }
       } catch (e) {
         log(username, `Lỗi: ${e.message}`, "error");
       }
