@@ -60,23 +60,29 @@ async function parseTopCashUser(client, botAppId) {
       if (message.author.id === botAppId && message.embeds.length > 0) {
         const embed = message.embeds[0];
         if (embed.fields && embed.fields.length > 0) {
-          const topField = embed.fields[0].value;  // "1. <@user_id> - $amount"
-          const userMatch = topField.match(/<@(\d+)>/);
-          if (userMatch) {
-            const userId = userMatch[1];
-            const amountMatch = topField.match(/\$(\d+)/);
-            const amount = amountMatch ? parseInt(amountMatch[1]) : 0;
-            resolve({ userId, amount });
-            client.removeListener('messageCreate', listener);
-            return;
+          const victims = [];
+          for (const field of embed.fields) {
+            const topField = field.value;  // "1. <@user_id> - $amount"
+            const userMatch = topField.match(/<@(\d+)>/);
+            if (userMatch) {
+              const userId = userMatch[1];
+              const amountMatch = topField.match(/\$(\d+)/);
+              const amount = amountMatch ? parseInt(amountMatch[1]) : 0;
+              if (amount > 0) {
+                victims.push({ userId, amount });
+              }
+            }
           }
+          resolve(victims);
+          client.removeListener('messageCreate', listener);
+          return;
         }
       }
     };
     client.on('messageCreate', listener);
     setTimeout(() => {
       client.removeListener('messageCreate', listener);
-      resolve(null);  // Timeout, không tìm thấy
+      resolve([]);  // Timeout, không tìm thấy
     }, 10000);
   });
 }
@@ -205,26 +211,33 @@ async function collectIncome(token, index) {
           ]);
           log(username, `Đã gửi /leaderboard -cash`, "info");
 
-          // Parse top user
-          const topUser = await parseTopCashUser(client, CONFIG.UNBELIEVA_APP_ID);
-          if (topUser && topUser.amount > 0) {
-            // Tính tỷ lệ ước tính
-            const successRate = Math.min(90, Math.max(10, 50 + (robberCash / topUser.amount - 1) * 25));
-            if (successRate > CONFIG.MIN_SUCCESS_RATE) {  // Threshold tùy chỉnh
-              await sleep(CONFIG.WAIT_AFTER_LEADERBOARD * 1000);
+          // Parse top users
+          const victims = await parseTopCashUser(client, CONFIG.UNBELIEVA_APP_ID);
+          if (victims.length > 0) {
+            // Chọn victim có cash cao nhất mà robber có thể rob thành công (robberCash > victim.amount)
+            victims.sort((a, b) => b.amount - a.amount);  // Sắp xếp giảm dần theo cash
+            const bestVictim = victims.find(v => robberCash > v.amount);
+            if (bestVictim) {
+              // Tính tỷ lệ ước tính
+              const successRate = Math.min(90, Math.max(10, 50 + (robberCash / bestVictim.amount - 1) * 25));
+              if (successRate > CONFIG.MIN_SUCCESS_RATE) {
+                await sleep(CONFIG.WAIT_AFTER_LEADERBOARD * 1000);
 
-              // Gửi /rob <user_id>
-              await channel.sendSlash(CONFIG.UNBELIEVA_APP_ID, "rob", [
-                { type: 6, name: "user", value: topUser.userId }
-              ]);
-              log(username, `Đã rob user ${topUser.userId} (tỷ lệ: ${successRate.toFixed(1)}%)`, "success");
+                // Gửi /rob <user_id>
+                await channel.sendSlash(CONFIG.UNBELIEVA_APP_ID, "rob", [
+                  { type: 6, name: "user", value: bestVictim.userId }
+                ]);
+                log(username, `Đã rob user ${bestVictim.userId} (cash: $${bestVictim.amount}, tỷ lệ: ${successRate.toFixed(1)}%)`, "success");
 
-              await sleep(CONFIG.WAIT_AFTER_ROB_CRIME * 1000);
+                await sleep(CONFIG.WAIT_AFTER_ROB_CRIME * 1000);
+              } else {
+                log(username, `Bỏ qua rob: tỷ lệ thấp (${successRate.toFixed(1)}%)`, "warn");
+              }
             } else {
-              log(username, `Bỏ qua rob: tỷ lệ thấp (${successRate.toFixed(1)}%)`, "warn");
+              log(username, `Không có victim phù hợp (robber cash: $${robberCash})`, "warn");
             }
           } else {
-            log(username, `Không tìm thấy top user hoặc họ không có cash`, "warn");
+            log(username, `Không tìm thấy victims`, "warn");
           }
         }
 

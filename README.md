@@ -10,7 +10,7 @@ Tự động gửi lệnh `/collect-income` và `/deposit all` của bot [Unbeli
 - Log màu sắc trực quan theo thời gian thực
 - Safety timeout cho mỗi tài khoản
 - Tự động deposit toàn bộ số tiền đã collect vào bank sau mỗi lần collect
-- Tự động rob người dùng có tiền mặt cao nhất (cash) sau deposit (chỉ khi tỷ lệ thành công >60%)
+- Tự động rob người dùng có tiền mặt cao nhất mà robber có thể rob thành công (cash robber > cash victim, tỷ lệ >60%)
 - Tự động gửi lệnh /crime để kiếm tiền thêm
 
 ## Cài đặt
