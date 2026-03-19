@@ -1,0 +1,14 @@
+{
+  "name": "discord-collect-income",
+  "version": "1.0.0",
+  "description": "Discord /collect-income bot tự động - UnbelievaBoat",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "chalk": "^4.1.2",
+    "debug": "^4.4.3",
+    "discord.js-selfbot-v13": "^3.3.0"
+  }
+}
