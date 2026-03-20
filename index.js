@@ -10,6 +10,30 @@ const fs = require("fs");
 const { CONFIG } = require("./config");
 
 // ============================================================
+// GLOBAL CLIENT FOR LISTENERS
+// ============================================================
+
+const globalClient = new Client({ checkUpdate: false });
+
+// ============================================================
+// GLOBAL COUNTERS
+// ============================================================
+
+let robCount = 0;
+let crimeCount = 0;
+let lastResetDay = new Date().getDate();
+
+function resetCountersIfNewDay() {
+  const currentDay = new Date().getDate();
+  if (currentDay !== lastResetDay) {
+    robCount = 0;
+    crimeCount = 0;
+    lastResetDay = currentDay;
+    log(null, `Reset counters: rob ${robCount}, crime ${crimeCount}`, "info");
+  }
+}
+
+// ============================================================
 // UTILS
 // ============================================================
 
@@ -96,9 +120,11 @@ async function parseRobberBalance(client, botAppId) {
     const listener = (message) => {
       if (message.author.id === botAppId && message.embeds.length > 0) {
         const embed = message.embeds[0];
-        const cashField = embed.fields.find(f => f.name.toLowerCase().includes('wallet') || f.name.toLowerCase().includes('cash'));
+        const cashField = embed.fields.find(f => f.name.toLowerCase().includes('cash'));
         if (cashField) {
-          const cash = parseInt(cashField.value.replace(/[^\d-]/g, ''));
+          // Xóa emoji mention <:name:id>, rồi lấy số (có thể có dấu phẩy)
+          const cleanValue = cashField.value.replace(/<:[^>]+>/g, '').trim();
+          const cash = parseInt(cleanValue.replace(/[,\s]/g, '')) || 0;
           resolve(cash);
           client.removeListener('messageCreate', listener);
         }
@@ -111,6 +137,66 @@ async function parseRobberBalance(client, botAppId) {
     }, 10000);
   });
 }
+
+// ============================================================
+// GLOBAL LISTENER FOR WITHDRAW
+// ============================================================
+
+// Cache user gần nhất gửi message (không phải bot) trong mỗi channel
+const lastUserInChannel = new Map(); // channelId → { userId, tag }
+
+globalClient.on('messageCreate', async (message) => {
+  // Cache user gần nhất (không phải bot, không phải globalClient)
+  if (
+    CONFIG.CHANNEL_IDS.includes(message.channel.id) &&
+    !message.author.bot &&
+    message.author.id !== globalClient.user?.id
+  ) {
+    lastUserInChannel.set(message.channel.id, {
+      userId: message.author.id,
+      tag: message.author.tag,
+    });
+  }
+
+  if (!CONFIG.ENABLE_AUTO_ROB_WITHDRAW) return;
+  if (!CONFIG.CHANNEL_IDS.includes(message.channel.id)) return;
+  if (message.author.id !== CONFIG.UNBELIEVA_APP_ID) return;
+
+  // Check embed description chứa "withdrew"
+  const embedDesc = message.embeds?.[0]?.description || '';
+  if (!embedDesc.toLowerCase().includes('withdrew')) return;
+
+  // Lấy user: ưu tiên interaction.user, fallback cache gần nhất
+  const interactionUser = message.interaction?.user;
+  const cachedUser = lastUserInChannel.get(message.channel.id);
+  const targetUser = interactionUser || (cachedUser ? { id: cachedUser.userId, tag: cachedUser.tag } : null);
+
+  if (!targetUser || targetUser.id === globalClient.user?.id) return;
+
+  const action = isWithdraw ? 'withdraw' : 'crime success';
+  log(null, `Detected ${action} by ${targetUser.tag || targetUser.id}, checking balance...`, "info");
+
+  resetCountersIfNewDay();
+  if (robCount >= CONFIG.MAX_ROB_PER_DAY) {
+    log(null, `Skipped rob: max rob/ngày reached`, "warn");
+    return;
+  }
+
+  try {
+    await message.channel.send("/balance");
+    const robberCash = await parseRobberBalance(globalClient, CONFIG.UNBELIEVA_APP_ID);
+    if (robberCash > CONFIG.MIN_QUICK_ROB_CASH) {
+      await message.channel.sendSlash(CONFIG.UNBELIEVA_APP_ID, "rob", [
+        { type: 6, name: "user", value: targetUser.id }
+      ]);
+      robCount++;
+    } else {
+      log(null, `Skipped rob: low cash $${robberCash}`, "warn");
+    }
+  } catch (e) {
+    log(null, `Failed to rob: ${e.message}`, "error");
+  }
+});
 
 // ============================================================
 // LOAD TOKENS
@@ -169,7 +255,7 @@ async function collectIncome(token, index) {
       log(username, `Đã đăng nhập. Đang gửi /collect-income...`);
 
       try {
-        const channel = await client.channels.fetch(CONFIG.CHANNEL_ID);
+        const channel = await client.channels.fetch(CONFIG.CHANNEL_IDS[0]);
 
         if (!channel) {
           log(username, `Không tìm thấy channel: ${CONFIG.CHANNEL_ID}`, "error");
@@ -200,51 +286,63 @@ async function collectIncome(token, index) {
 
         // Rob/Crime logic
         if (CONFIG.ENABLE_ROB) {
-          // Gửi /balance để lấy cash của robber
-          await channel.send("/balance");
-          const robberCash = await parseRobberBalance(client, CONFIG.UNBELIEVA_APP_ID);
-          log(username, `Robber cash: $${robberCash}`, "info");
+          resetCountersIfNewDay();
+          if (robCount < CONFIG.MAX_ROB_PER_DAY) {
+            // Gửi /balance để lấy cash của robber
+            await channel.send("/balance");
+            const robberCash = await parseRobberBalance(client, CONFIG.UNBELIEVA_APP_ID);
+            log(username, `Robber cash: $${robberCash}`, "info");
 
-          // Gửi /leaderboard -cash
-          await channel.send("/leaderboard 1 -cash");
-          log(username, `Đã gửi /leaderboard 1 -cash`, "info");
+            // Gửi /leaderboard -cash
+            await channel.send("/leaderboard 1 -cash");
+            log(username, `Đã gửi /leaderboard 1 -cash`, "info");
 
-          // Parse top users
-          const victims = await parseTopCashUser(client, CONFIG.UNBELIEVA_APP_ID);
-          if (victims.length > 0) {
-            // Chọn victim có cash cao nhất mà robber có thể rob thành công (robberCash > victim.amount)
-            victims.sort((a, b) => b.amount - a.amount);  // Sắp xếp giảm dần theo cash
-            const bestVictim = victims.find(v => robberCash > v.amount);
-            if (bestVictim) {
-              // Tính tỷ lệ ước tính
-              const successRate = Math.min(90, Math.max(10, 50 + (robberCash / bestVictim.amount - 1) * 25));
-              if (successRate > CONFIG.MIN_SUCCESS_RATE) {
-                await sleep(CONFIG.WAIT_AFTER_LEADERBOARD * 1000);
+            // Parse top users
+            const victims = await parseTopCashUser(client, CONFIG.UNBELIEVA_APP_ID);
+            if (victims.length > 0) {
+              // Chọn victim có cash cao nhất mà robber có thể rob thành công (robberCash > victim.amount)
+              victims.sort((a, b) => b.amount - a.amount);  // Sắp xếp giảm dần theo cash
+              const bestVictim = victims.find(v => robberCash > v.amount);
+              if (bestVictim) {
+                // Tính tỷ lệ ước tính
+                const successRate = Math.min(90, Math.max(10, 50 + (robberCash / bestVictim.amount - 1) * 25));
+                if (successRate > CONFIG.MIN_SUCCESS_RATE) {
+                  await sleep(CONFIG.WAIT_AFTER_LEADERBOARD * 1000);
 
-                // Gửi /rob <user_id>
-                await channel.sendSlash(CONFIG.UNBELIEVA_APP_ID, "rob", [
-                  { type: 6, name: "user", value: bestVictim.userId }
-                ]);
-                log(username, `Đã rob user ${bestVictim.userId} (cash: $${bestVictim.amount}, tỷ lệ: ${successRate.toFixed(1)}%)`, "success");
+                  // Gửi /rob <user_id>
+                  await channel.sendSlash(CONFIG.UNBELIEVA_APP_ID, "rob", [
+                    { type: 6, name: "user", value: bestVictim.userId }
+                  ]);
+                  log(username, `Đã rob user ${bestVictim.userId} (cash: $${bestVictim.amount}, tỷ lệ: ${successRate.toFixed(1)}%)`, "success");
+                  robCount++;
 
-                await sleep(CONFIG.WAIT_AFTER_ROB_CRIME * 1000);
+                  await sleep(CONFIG.WAIT_AFTER_ROB_CRIME * 1000);
+                } else {
+                  log(username, `Bỏ qua rob: tỷ lệ thấp (${successRate.toFixed(1)}%)`, "warn");
+                }
               } else {
-                log(username, `Bỏ qua rob: tỷ lệ thấp (${successRate.toFixed(1)}%)`, "warn");
+                log(username, `Không có victim phù hợp (robber cash: $${robberCash})`, "warn");
               }
             } else {
-              log(username, `Không có victim phù hợp (robber cash: $${robberCash})`, "warn");
+              log(username, `Không tìm thấy victims`, "warn");
             }
           } else {
-            log(username, `Không tìm thấy victims`, "warn");
+            log(username, `Đã đạt max rob/ngày (${CONFIG.MAX_ROB_PER_DAY})`, "warn");
           }
         }
 
         if (CONFIG.ENABLE_CRIME && robberCash > CONFIG.MIN_CRIME_CASH) {
-          // Gửi /crime
-          await channel.sendSlash(CONFIG.UNBELIEVA_APP_ID, "crime");
-          log(username, `Đã gửi /crime`, "info");
+          resetCountersIfNewDay();
+          if (crimeCount < CONFIG.MAX_CRIME_PER_DAY) {
+            // Gửi /crime
+            await channel.sendSlash(CONFIG.UNBELIEVA_APP_ID, "crime");
+            log(username, `Đã gửi /crime`, "info");
+            crimeCount++;
 
-          await sleep(CONFIG.WAIT_AFTER_ROB_CRIME * 1000);
+            await sleep(CONFIG.WAIT_AFTER_ROB_CRIME * 1000);
+          } else {
+            log(username, `Đã đạt max crime/ngày (${CONFIG.MAX_CRIME_PER_DAY})`, "warn");
+          }
         } else if (CONFIG.ENABLE_CRIME) {
           log(username, `Bỏ qua /crime: cash quá thấp (${robberCash})`, "warn");
         }
@@ -311,7 +409,13 @@ async function main() {
 
   const tokens = loadTokens();
 
-  log(null, `Channel ID    : ${chalk.yellow(CONFIG.CHANNEL_ID)}`);
+  // Login global client for listeners
+  if (tokens.length > 0) {
+    await globalClient.login(tokens[0]);
+    log(null, `Global client logged in for listeners`, "success");
+  }
+
+  log(null, `Channel IDs   : ${chalk.yellow(CONFIG.CHANNEL_IDS.join(', '))}`);
   log(null, `Interval      : ${chalk.yellow(CONFIG.BASE_INTERVAL_HOURS + "h")} + random ${chalk.yellow(CONFIG.RANDOM_EXTRA_MIN_MINUTES + "-" + CONFIG.RANDOM_EXTRA_MAX_MINUTES + " phút")}`);
   log(null, `Delay/account : ${chalk.yellow(CONFIG.DELAY_BETWEEN_ACCOUNTS_MIN + "-" + CONFIG.DELAY_BETWEEN_ACCOUNTS_MAX + "s")}`);
   console.log();

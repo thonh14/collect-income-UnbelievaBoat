@@ -10,8 +10,8 @@ Tự động gửi lệnh `/collect-income` và `/deposit all` của bot [Unbeli
 - Log màu sắc trực quan theo thời gian thực
 - Safety timeout cho mỗi tài khoản
 - Tự động deposit toàn bộ số tiền đã collect vào bank sau mỗi lần collect
-- Tự động rob người dùng có tiền mặt cao nhất mà robber có thể rob thành công (cash robber > cash victim, tỷ lệ >60%)
-- Tự động gửi lệnh /crime để kiếm tiền thêm (chỉ khi cash >1000 để tránh mất tiền nếu fail)
+- Tự động rob người dùng vừa withdraw tiền từ bank (check balance trước, chỉ rob nếu cash >500)
+- Limit số lần rob/crime/ngày (max 20 rob, 40 crime) để tránh ban
 
 ## Cài đặt
 
@@ -41,12 +41,13 @@ MTIzNDU2Nzg5MDEyMzQ1Njc5.GxxxXx.yyyyyyyyyy
 ### 2. Chỉnh `config.js`
 
 ```js
-CHANNEL_ID: "123456789012345678",  // ID của channel muốn gửi lệnh
+CHANNEL_IDS: ["123456789012345678", "987654321098765432"],  // Array ID các channel muốn gửi lệnh
 ```
 
 **Cách lấy Channel ID:**
 - Bật Developer Mode trong Discord (Settings → Advanced → Developer Mode)
 - Chuột phải vào channel → **Copy Channel ID**
+- Thêm vào array CHANNEL_IDS
 
 ### 3. Cấu hình nâng cao (tuỳ chọn)
 
@@ -63,8 +64,10 @@ CHANNEL_ID: "123456789012345678",  // ID của channel muốn gửi lệnh
 | `ENABLE_CRIME` | `true` | Bật crime sau rob |
 | `WAIT_AFTER_LEADERBOARD` | `3` | Chờ phản hồi leaderboard (giây) |
 | `WAIT_AFTER_ROB_CRIME` | `2` | Chờ phản hồi rob/crime (giây) |
-| `MIN_SUCCESS_RATE` | `60` | Tỷ lệ thành công tối thiểu để rob (%) |
-| `MIN_CRIME_CASH` | `1000` | Cash tối thiểu để crime (tránh mất tiền nếu fail) |
+| `ENABLE_AUTO_ROB_WITHDRAW` | `true` | Bật auto rob khi detect withdraw |
+| `MIN_QUICK_ROB_CASH` | `500` | Cash tối thiểu để quick rob (tránh mất tiền) |
+| `MAX_ROB_PER_DAY` | `20` | Max rob/ngày |
+| `MAX_CRIME_PER_DAY` | `40` | Max crime/ngày |
 
 ## Chạy
 
@@ -77,3 +80,5 @@ npm start
 - Sử dụng **user token** cá nhân (self-bot) — vi phạm ToS của Discord. Dùng có trách nhiệm.
 - Không chia sẻ token với bất kỳ ai.
 - Bot UnbelievaBoat (`292953664492929025`) phải có trong server của channel đó.
+- Rob/crime có rủi ro mất tiền nếu fail — bot đã có bảo vệ check balance.
+- Limit/ngày để tránh ban Discord.

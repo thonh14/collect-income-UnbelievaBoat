@@ -6,8 +6,8 @@
 
 const CONFIG = {
   // ---- Discord Settings ----
-  // Channel ID để gửi lệnh /collect-income (click chuột phải vào channel → Copy Channel ID)
-  CHANNEL_ID: "1483747272104743052",
+  // Channel ID để gửi lệnh /collect-income (array nếu nhiều channel)
+  CHANNEL_IDS: ["1483747272104743052","1441086654398857328"],
 
   // Application ID của bot UnbelievaBoat (không cần thay đổi)
   UNBELIEVA_APP_ID: "292953664492929025",
@@ -34,12 +34,16 @@ const CONFIG = {
   WAIT_AFTER_SEND: 5,
 
   // ---- Rob/Crime Settings ----
-  ENABLE_ROB: true,  // Bật rob top cash user
-  ENABLE_CRIME: true,  // Bật crime sau rob
+  ENABLE_ROB: false,  // Bật rob top cash user
+  ENABLE_CRIME: false,  // Bật crime sau rob
+  ENABLE_AUTO_ROB_WITHDRAW: true,  // Bật auto rob khi detect withdraw
   WAIT_AFTER_LEADERBOARD: 3,  // Chờ phản hồi leaderboard (giây)
   WAIT_AFTER_ROB_CRIME: 2,  // Chờ phản hồi rob/crime (giây)
   MIN_SUCCESS_RATE: 60,  // Tỷ lệ thành công tối thiểu để rob (%)
   MIN_CRIME_CASH: 1000,  // Cash tối thiểu để crime (tránh mất tiền nếu fail)
+  MIN_QUICK_ROB_CASH: 500,  // Cash tối thiểu để quick rob (tránh mất tiền)
+  MAX_ROB_PER_DAY: 20,  // Max rob/ngày
+  MAX_CRIME_PER_DAY: 40,  // Max crime/ngày
 };
 
 module.exports = { CONFIG };
